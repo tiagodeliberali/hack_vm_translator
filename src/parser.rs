@@ -1,3 +1,4 @@
+use rand::prelude::*;
 use std::collections::HashMap;
 
 pub fn parse_content(content: Vec<String>, filename: String) -> Vec<String> {
@@ -40,6 +41,13 @@ fn build_actions() -> HashMap<String, Callback> {
     actions.insert(String::from("pop"), pop_action);
     actions.insert(String::from("add"), add_action);
     actions.insert(String::from("sub"), sub_action);
+    actions.insert(String::from("eq"), eq_action);
+    actions.insert(String::from("lt"), lt_action);
+    actions.insert(String::from("gt"), gt_action);
+    actions.insert(String::from("and"), and_action);
+    actions.insert(String::from("or"), or_action);
+    actions.insert(String::from("not"), not_action);
+    actions.insert(String::from("neg"), neg_action);
 
     actions
 }
@@ -179,6 +187,84 @@ fn sub_action(_: String, _: &str) -> Vec<String> {
     builder.parsed_content()
 }
 
+fn eq_action(_: String, _: &str) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.pop_from_stack_to_d();
+    builder.pop_from_stack();
+    builder.m_less_d_to_d();
+    builder.compare_with_d("JEQ");
+    builder.advance_sp();
+
+    builder.parsed_content()
+}
+
+fn lt_action(_: String, _: &str) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.pop_from_stack_to_d();
+    builder.pop_from_stack();
+    builder.m_less_d_to_d();
+    builder.compare_with_d("JLT");
+    builder.advance_sp();
+
+    builder.parsed_content()
+}
+
+fn gt_action(_: String, _: &str) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.pop_from_stack_to_d();
+    builder.pop_from_stack();
+    builder.m_less_d_to_d();
+    builder.compare_with_d("JGT");
+    builder.advance_sp();
+
+    builder.parsed_content()
+}
+
+fn and_action(_: String, _: &str) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.pop_from_stack_to_d();
+    builder.pop_from_stack();
+    builder.m_and_d_to_m();
+    builder.advance_sp();
+
+    builder.parsed_content()
+}
+
+fn or_action(_: String, _: &str) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.pop_from_stack_to_d();
+    builder.pop_from_stack();
+    builder.m_or_d_to_m();
+    builder.advance_sp();
+
+    builder.parsed_content()
+}
+
+fn not_action(_: String, _: &str) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.pop_from_stack();
+    builder.not_m_to_m();
+    builder.advance_sp();
+
+    builder.parsed_content()
+}
+
+fn neg_action(_: String, _: &str) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.pop_from_stack();
+    builder.neg_m_to_m();
+    builder.advance_sp();
+
+    builder.parsed_content()
+}
+
 struct AssemblerCommandBuilder {
     result: Vec<String>,
 }
@@ -199,7 +285,7 @@ impl AssemblerCommandBuilder {
     pub fn d_plus_a_to_d(&mut self) {
         self.result.push(String::from("D=D+A"));
     }
-    
+
     pub fn d_plus_a_address_to_d(&mut self) {
         self.result.push(String::from("A=D+A"));
         self.result.push(String::from("D=M"));
@@ -213,10 +299,43 @@ impl AssemblerCommandBuilder {
         self.result.push(String::from("M=M-D"));
     }
 
+    pub fn m_less_d_to_d(&mut self) {
+        self.result.push(String::from("D=M-D"));
+    }
+
+    pub fn m_and_d_to_m(&mut self) {
+        self.result.push(String::from("M=M&D"));
+    }
+
+    pub fn m_or_d_to_m(&mut self) {
+        self.result.push(String::from("M=M|D"));
+    }
+
+    pub fn not_m_to_m(&mut self) {
+        self.result.push(String::from("M=!M"));
+    }
+
+    pub fn neg_m_to_m(&mut self) {
+        self.result.push(String::from("M=-M"));
+    }
+
+    pub fn compare_with_d(&mut self, compare: &str) {
+        let random_jump: u32 = rand::thread_rng().gen();
+        let jump_name = format!("FALSE.{}", random_jump);
+
+        self.result.push(String::from("M=-1")); // m = true
+        self.result.push(format!("@{}", jump_name)); // if compare is false, set m to false
+        self.result.push(format!("D;{}", compare));
+        self.result.push(String::from("@SP"));
+        self.result.push(String::from("A=M"));
+        self.result.push(String::from("M=0"));
+        self.result.push(format!("({})", jump_name)); // end if
+    }
+
     pub fn m_to_d(&mut self) {
         self.result.push(String::from("D=M"));
     }
-    
+
     pub fn d_to_m(&mut self) {
         self.result.push(String::from("M=D"));
     }

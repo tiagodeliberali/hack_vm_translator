@@ -1,5 +1,5 @@
-use std::{env, path::Path};
 use std::fs;
+use std::{env, path::Path};
 
 mod builder;
 mod parser;
