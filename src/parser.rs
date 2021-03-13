@@ -39,15 +39,18 @@ fn build_actions() -> HashMap<String, Callback> {
 
     actions.insert(String::from("push"), push_action);
     actions.insert(String::from("pop"), pop_action);
+
     actions.insert(String::from("add"), add_action);
     actions.insert(String::from("sub"), sub_action);
+    actions.insert(String::from("neg"), neg_action);
+
     actions.insert(String::from("eq"), eq_action);
     actions.insert(String::from("lt"), lt_action);
     actions.insert(String::from("gt"), gt_action);
+
     actions.insert(String::from("and"), and_action);
     actions.insert(String::from("or"), or_action);
     actions.insert(String::from("not"), not_action);
-    actions.insert(String::from("neg"), neg_action);
 
     actions
 }
