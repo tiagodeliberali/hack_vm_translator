@@ -138,7 +138,11 @@ fn pop_action(input: String, filename: &str) -> Vec<String> {
             builder.pop_from_stack_to("tmp");
         }
         "static" => {
-            builder.pop_from_stack_to(format!("{}.{}", filename, value).as_str());
+            let parsed_value = format!("{}.{}", filename, value);
+
+            builder.pop_from_stack_to_d();
+            builder.at(parsed_value.as_str());
+            builder.d_to_m();
         }
         "pointer" => {
             let parsed_value = if value == "0" { "THIS" } else { "THAT" };
