@@ -90,7 +90,7 @@ fn push_action(input: String, filename: &str) -> Vec<String> {
         "pointer" => {
             let parsed_value = if value == "0" { "THIS" } else { "THAT" };
 
-            builder.at(format!("{}.{}", filename, parsed_value).as_str());
+            builder.at(parsed_value);
             builder.m_to_d();
             builder.push_to_stack();
         }
@@ -142,7 +142,10 @@ fn pop_action(input: String, filename: &str) -> Vec<String> {
         }
         "pointer" => {
             let parsed_value = if value == "0" { "THIS" } else { "THAT" };
-            builder.pop_from_stack_to(parsed_value);
+
+            builder.pop_from_stack_to_d();
+            builder.at(parsed_value);
+            builder.d_to_m();
         }
         _ => panic!(format!("Invalid memory location! {}", mem)),
     }
@@ -208,6 +211,10 @@ impl AssemblerCommandBuilder {
 
     pub fn m_to_d(&mut self) {
         self.result.push(String::from("D=M"));
+    }
+    
+    pub fn d_to_m(&mut self) {
+        self.result.push(String::from("M=D"));
     }
 
     pub fn d_to_tmp(&mut self) {
