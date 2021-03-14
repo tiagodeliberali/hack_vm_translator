@@ -8,31 +8,61 @@ pub fn parse_content(content: Vec<String>, filename: String) -> Vec<String> {
     for line in content {
         result.push(format!("// {}", line));
 
-        let (command, _, _) = split_command(&line);
+        let instruction = VMInstruction::new(&line, &filename);
 
-        let action = actions.get(&command).expect("Invalid action required!");
+        let action = actions
+            .get(&instruction.command)
+            .expect("Invalid action required!");
 
-        result.extend(action(line, filename.as_str()));
+        result.extend(action(instruction));
     }
 
     result
 }
 
-fn split_command(line: &String) -> (String, String, String) {
-    let command: Vec<&str> = line.split(' ').collect();
-
-    if command.len() == 1 {
-        return (String::from(command[0]), String::new(), String::new());
-    }
-
-    (
-        String::from(command[0]),
-        String::from(command[1]),
-        String::from(command[2]),
-    )
+struct VMInstruction {
+    pub command: String,
+    pub detail: String,
+    pub value: String,
+    pub filename: String,
 }
 
-type Callback = fn(String, &str) -> Vec<String>;
+impl VMInstruction {
+    pub fn new(line: &String, filename: &str) -> VMInstruction {
+        let (command, detail, value) = VMInstruction::split_command(&line);
+
+        VMInstruction {
+            command,
+            detail,
+            value,
+            filename: String::from(filename),
+        }
+    }
+
+    fn split_command(line: &String) -> (String, String, String) {
+        let command: Vec<&str> = line.split(' ').collect();
+
+        if command.len() == 1 {
+            return (String::from(command[0]), String::new(), String::new());
+        }
+
+        if command.len() == 2 {
+            return (
+                String::from(command[0]),
+                String::from(command[1]),
+                String::new(),
+            );
+        }
+
+        (
+            String::from(command[0]),
+            String::from(command[1]),
+            String::from(command[2]),
+        )
+    }
+}
+
+type Callback = fn(VMInstruction) -> Vec<String>;
 
 fn build_actions() -> HashMap<String, Callback> {
     let mut actions: HashMap<String, Callback> = HashMap::new();
@@ -55,38 +85,37 @@ fn build_actions() -> HashMap<String, Callback> {
     actions
 }
 
-fn push_action(input: String, filename: &str) -> Vec<String> {
-    let (_, mem, value) = split_command(&input);
+fn push_action(instruction: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     // use value information
-    match mem.as_str() {
+    match instruction.detail.as_str() {
         "local" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
             builder.get_value_from_segment("LCL");
             builder.push_to_stack();
         }
         "argument" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
             builder.get_value_from_segment("ARG");
             builder.push_to_stack();
         }
         "this" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
             builder.get_value_from_segment("THIS");
             builder.push_to_stack();
         }
         "that" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
             builder.get_value_from_segment("THAT");
             builder.push_to_stack();
         }
         "constant" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
             builder.push_to_stack();
         }
         "temp" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
 
             builder.at("5");
             builder.d_plus_a_address_to_d();
@@ -94,81 +123,88 @@ fn push_action(input: String, filename: &str) -> Vec<String> {
             builder.push_to_stack();
         }
         "static" => {
-            builder.at(format!("{}.{}", filename, value).as_str());
+            builder.at(format!("{}.{}", instruction.filename, instruction.value).as_str());
             builder.m_to_d();
             builder.push_to_stack();
         }
         "pointer" => {
-            let parsed_value = if value == "0" { "THIS" } else { "THAT" };
+            let parsed_value = if instruction.value == "0" {
+                "THIS"
+            } else {
+                "THAT"
+            };
 
             builder.at(parsed_value);
             builder.m_to_d();
             builder.push_to_stack();
         }
-        _ => panic!(format!("Invalid memory location! {}", mem)),
+        _ => panic!(format!("Invalid memory location! {}", instruction.detail)),
     }
 
     builder.parsed_content()
 }
 
-fn pop_action(input: String, filename: &str) -> Vec<String> {
-    let (_, mem, value) = split_command(&input);
+fn pop_action(instruction: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     // use value information
-    match mem.as_str() {
+    match instruction.detail.as_str() {
         "local" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
             builder.get_address_from_segment("LCL");
             builder.d_to_tmp();
             builder.pop_from_stack_to("tmp");
         }
         "argument" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
             builder.get_address_from_segment("ARG");
             builder.d_to_tmp();
             builder.pop_from_stack_to("tmp");
         }
         "this" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
             builder.get_address_from_segment("THIS");
             builder.d_to_tmp();
             builder.pop_from_stack_to("tmp");
         }
         "that" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
             builder.get_address_from_segment("THAT");
             builder.d_to_tmp();
             builder.pop_from_stack_to("tmp");
         }
         "temp" => {
-            builder.move_value_to_d(value);
+            builder.move_value_to_d(instruction.value);
             builder.at("5");
             builder.d_plus_a_to_d();
             builder.d_to_tmp();
             builder.pop_from_stack_to("tmp");
         }
         "static" => {
-            let parsed_value = format!("{}.{}", filename, value);
+            let parsed_value = format!("{}.{}", instruction.filename, instruction.value);
 
             builder.pop_from_stack_to_d();
             builder.at(parsed_value.as_str());
             builder.d_to_m();
         }
         "pointer" => {
-            let parsed_value = if value == "0" { "THIS" } else { "THAT" };
+            let parsed_value = if instruction.value == "0" {
+                "THIS"
+            } else {
+                "THAT"
+            };
 
             builder.pop_from_stack_to_d();
             builder.at(parsed_value);
             builder.d_to_m();
         }
-        _ => panic!(format!("Invalid memory location! {}", mem)),
+        _ => panic!(format!("Invalid memory location! {}", instruction.detail)),
     }
 
     builder.parsed_content()
 }
 
-fn add_action(_: String, _: &str) -> Vec<String> {
+fn add_action(_: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     builder.pop_from_stack_to_d();
@@ -179,7 +215,7 @@ fn add_action(_: String, _: &str) -> Vec<String> {
     builder.parsed_content()
 }
 
-fn sub_action(_: String, _: &str) -> Vec<String> {
+fn sub_action(_: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     builder.pop_from_stack_to_d();
@@ -190,7 +226,7 @@ fn sub_action(_: String, _: &str) -> Vec<String> {
     builder.parsed_content()
 }
 
-fn eq_action(_: String, _: &str) -> Vec<String> {
+fn eq_action(_: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     builder.pop_from_stack_to_d();
@@ -202,7 +238,7 @@ fn eq_action(_: String, _: &str) -> Vec<String> {
     builder.parsed_content()
 }
 
-fn lt_action(_: String, _: &str) -> Vec<String> {
+fn lt_action(_: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     builder.pop_from_stack_to_d();
@@ -214,7 +250,7 @@ fn lt_action(_: String, _: &str) -> Vec<String> {
     builder.parsed_content()
 }
 
-fn gt_action(_: String, _: &str) -> Vec<String> {
+fn gt_action(_: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     builder.pop_from_stack_to_d();
@@ -226,7 +262,7 @@ fn gt_action(_: String, _: &str) -> Vec<String> {
     builder.parsed_content()
 }
 
-fn and_action(_: String, _: &str) -> Vec<String> {
+fn and_action(_: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     builder.pop_from_stack_to_d();
@@ -237,7 +273,7 @@ fn and_action(_: String, _: &str) -> Vec<String> {
     builder.parsed_content()
 }
 
-fn or_action(_: String, _: &str) -> Vec<String> {
+fn or_action(_: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     builder.pop_from_stack_to_d();
@@ -248,7 +284,7 @@ fn or_action(_: String, _: &str) -> Vec<String> {
     builder.parsed_content()
 }
 
-fn not_action(_: String, _: &str) -> Vec<String> {
+fn not_action(_: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     builder.pop_from_stack();
@@ -258,7 +294,7 @@ fn not_action(_: String, _: &str) -> Vec<String> {
     builder.parsed_content()
 }
 
-fn neg_action(_: String, _: &str) -> Vec<String> {
+fn neg_action(_: VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
 
     builder.pop_from_stack();
