@@ -82,6 +82,10 @@ fn build_actions() -> HashMap<String, Callback> {
     actions.insert(String::from("or"), or_action);
     actions.insert(String::from("not"), not_action);
 
+    actions.insert(String::from("label"), label_action);
+    actions.insert(String::from("goto"), goto_action);
+    actions.insert(String::from("if-goto"), ifgoto_action);
+
     actions
 }
 
@@ -304,6 +308,31 @@ fn neg_action(_: VMInstruction) -> Vec<String> {
     builder.parsed_content()
 }
 
+fn label_action(instruction: VMInstruction) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.label(&instruction.detail);
+
+    builder.parsed_content()
+}
+
+fn goto_action(instruction: VMInstruction) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.goto_label(&instruction.detail);
+
+    builder.parsed_content()
+}
+
+fn ifgoto_action(instruction: VMInstruction) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.pop_from_stack_to_d();
+    builder.jump_to_label_if_d_neq(&instruction.detail);
+
+    builder.parsed_content()
+}
+
 struct AssemblerCommandBuilder {
     result: Vec<String>,
 }
@@ -315,6 +344,20 @@ impl AssemblerCommandBuilder {
 
     pub fn parsed_content(&self) -> Vec<String> {
         self.result.clone()
+    }
+
+    pub fn label(&mut self, value: &str) {
+        self.result.push(format!("({})", value));
+    }
+
+    pub fn goto_label(&mut self, value: &str) {
+        self.result.push(format!("@{}", value));
+        self.result.push(String::from("0;JMP"));
+    }
+
+    pub fn jump_to_label_if_d_neq(&mut self, value: &str) {
+        self.result.push(format!("@{}", value));
+        self.result.push(String::from("D;JNE"));
     }
 
     pub fn at(&mut self, value: &str) {
