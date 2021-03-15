@@ -1,0 +1,45 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'hack_vm_translator'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=hack_vm_translator",
+                    "--package=hack_vm_translator"
+                ],
+                "filter": {
+                    "name": "hack_vm_translator",
+                    "kind": "bin"
+                }
+            },
+            "args": ["/home/tiagosantos/coursera/build-a-computer/projects/08/FunctionCalls/FibonacciElement"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'hack_vm_translator'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=hack_vm_translator",
+                    "--package=hack_vm_translator"
+                ],
+                "filter": {
+                    "name": "hack_vm_translator",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
