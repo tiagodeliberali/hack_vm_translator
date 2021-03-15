@@ -470,10 +470,7 @@ fn call_action(instruction: &VMInstruction) -> Vec<String> {
     let mut builder = AssemblerCommandBuilder::new();
     let random_jump: String = instruction.build_random_label_from("ret");
 
-    builder.label(&random_jump); // get a return point at d
     builder.move_value_to_d(&random_jump);
-    builder.at("51");
-    builder.d_plus_a_to_d();
     builder.push_to_stack(); // push return addr to stack
 
     builder.get_value_at("LCL");
@@ -501,6 +498,8 @@ fn call_action(instruction: &VMInstruction) -> Vec<String> {
     builder.d_to_m(); // Move LCL to first empty SP (will be filled by function)
 
     builder.goto_label(&instruction.build_function_name()); // go to function
+
+    builder.label(&random_jump); // get a return point
 
     builder.parsed_content()
 }
