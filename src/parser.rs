@@ -86,6 +86,10 @@ fn build_actions() -> HashMap<String, Callback> {
     actions.insert(String::from("goto"), goto_action);
     actions.insert(String::from("if-goto"), ifgoto_action);
 
+    actions.insert(String::from("function"), function_action);
+    actions.insert(String::from("return"), return_action);
+    actions.insert(String::from("call"), call_action);
+
     actions
 }
 
@@ -95,31 +99,31 @@ fn push_action(instruction: VMInstruction) -> Vec<String> {
     // use value information
     match instruction.detail.as_str() {
         "local" => {
-            builder.move_value_to_d(instruction.value);
-            builder.get_value_from_segment("LCL");
+            builder.move_value_to_d(&instruction.value);
+            builder.get_value_from_segment_plus_d("LCL");
             builder.push_to_stack();
         }
         "argument" => {
-            builder.move_value_to_d(instruction.value);
-            builder.get_value_from_segment("ARG");
+            builder.move_value_to_d(&instruction.value);
+            builder.get_value_from_segment_plus_d("ARG");
             builder.push_to_stack();
         }
         "this" => {
-            builder.move_value_to_d(instruction.value);
-            builder.get_value_from_segment("THIS");
+            builder.move_value_to_d(&instruction.value);
+            builder.get_value_from_segment_plus_d("THIS");
             builder.push_to_stack();
         }
         "that" => {
-            builder.move_value_to_d(instruction.value);
-            builder.get_value_from_segment("THAT");
+            builder.move_value_to_d(&instruction.value);
+            builder.get_value_from_segment_plus_d("THAT");
             builder.push_to_stack();
         }
         "constant" => {
-            builder.move_value_to_d(instruction.value);
+            builder.move_value_to_d(&instruction.value);
             builder.push_to_stack();
         }
         "temp" => {
-            builder.move_value_to_d(instruction.value);
+            builder.move_value_to_d(&instruction.value);
 
             builder.at("5");
             builder.d_plus_a_address_to_d();
@@ -154,31 +158,31 @@ fn pop_action(instruction: VMInstruction) -> Vec<String> {
     // use value information
     match instruction.detail.as_str() {
         "local" => {
-            builder.move_value_to_d(instruction.value);
-            builder.get_address_from_segment("LCL");
+            builder.move_value_to_d(&instruction.value);
+            builder.get_address_from_segment_plus_d("LCL");
             builder.d_to_tmp();
             builder.pop_from_stack_to("tmp");
         }
         "argument" => {
-            builder.move_value_to_d(instruction.value);
-            builder.get_address_from_segment("ARG");
+            builder.move_value_to_d(&instruction.value);
+            builder.get_address_from_segment_plus_d("ARG");
             builder.d_to_tmp();
             builder.pop_from_stack_to("tmp");
         }
         "this" => {
-            builder.move_value_to_d(instruction.value);
-            builder.get_address_from_segment("THIS");
+            builder.move_value_to_d(&instruction.value);
+            builder.get_address_from_segment_plus_d("THIS");
             builder.d_to_tmp();
             builder.pop_from_stack_to("tmp");
         }
         "that" => {
-            builder.move_value_to_d(instruction.value);
-            builder.get_address_from_segment("THAT");
+            builder.move_value_to_d(&instruction.value);
+            builder.get_address_from_segment_plus_d("THAT");
             builder.d_to_tmp();
             builder.pop_from_stack_to("tmp");
         }
         "temp" => {
-            builder.move_value_to_d(instruction.value);
+            builder.move_value_to_d(&instruction.value);
             builder.at("5");
             builder.d_plus_a_to_d();
             builder.d_to_tmp();
@@ -333,6 +337,116 @@ fn ifgoto_action(instruction: VMInstruction) -> Vec<String> {
     builder.parsed_content()
 }
 
+fn function_action(instruction: VMInstruction) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+    let random_label = format!("{}", rand::thread_rng().gen::<u32>());
+
+    builder.label(&instruction.detail);                         // set the label for the function
+
+    builder.move_value_to_d(&instruction.value);
+    builder.push_to_stack();
+
+    builder.label(format!("WHILE.{}", random_label).as_str()); // while d != 0
+
+    builder.pop_from_stack_to_d();
+    builder.jump_to_label_if_d_eq(&random_label);
+    builder.push_to_stack_zero();
+    builder.d_less_one_to_d(); // d--
+    builder.push_to_stack();
+
+    builder.goto_label(format!("WHILE.{}", random_label).as_str());
+
+    builder.label(&random_label); // end while
+
+    builder.parsed_content()
+}
+
+fn return_action(_: VMInstruction) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+
+    builder.pop_from_stack_to_d();
+    builder.at("temp.return.value");
+    builder.d_to_m(); // save return value to temp.return.value
+
+    builder.get_value_at("ARG");
+    builder.at("temp.sp");
+    builder.d_to_m(); // save SP original value to temp.sp
+
+    builder.get_value_at("LCL");
+    builder.at("SP");
+    builder.d_to_m(); // return pointer to end of backup values
+
+    builder.pop_from_stack_to_d();
+    builder.at("THAT");
+    builder.d_to_m(); // restore THAT value
+
+    builder.pop_from_stack_to_d();
+    builder.at("THIS");
+    builder.d_to_m(); // restore THIS value
+
+    builder.pop_from_stack_to_d();
+    builder.at("ARG");
+    builder.d_to_m(); // restore ARG value
+
+    builder.pop_from_stack_to_d();
+    builder.at("LCL");
+    builder.d_to_m(); // restore LCL value
+
+    builder.pop_from_stack_to_d();
+    builder.at("temp.return.addr");
+    builder.d_to_m(); // restore ARG value
+
+    builder.get_value_at("temp.sp");
+    builder.at("SP");
+    builder.d_to_m(); // restore SP value
+
+    builder.get_value_at("temp.return.value");
+    builder.push_to_stack(); // push return value to stack
+
+    builder.goto_value_at("temp.return.addr"); // go back to flow  
+
+    builder.parsed_content()
+}
+
+fn call_action(instruction: VMInstruction) -> Vec<String> {
+    let mut builder = AssemblerCommandBuilder::new();
+    let random_jump: String = format!("{}", rand::thread_rng().gen::<u32>());
+
+    builder.label(&random_jump); // get a return point at d
+    builder.move_value_to_d(&random_jump);
+    builder.at("51");
+    builder.d_plus_a_to_d();
+    builder.push_to_stack(); // push return addr to stack
+
+    builder.get_value_at("LCL");
+    builder.push_to_stack(); // push LCL addr to stack
+
+    builder.get_value_at("ARG");
+    builder.push_to_stack(); // push ARG addr to stack
+
+    builder.get_value_at("THIS");
+    builder.push_to_stack(); // push THIS addr to stack
+
+    builder.get_value_at("THAT");
+    builder.push_to_stack(); // push THAT addr to stack
+
+    builder.move_value_to_d("5");
+    builder.at(&instruction.value);
+    builder.d_plus_a_to_d();
+    builder.at("SP");
+    builder.m_less_d_to_d();
+    builder.at("ARG"); 
+    builder.d_to_m();       // Move ARGS to first argument
+
+    builder.get_value_at("SP");
+    builder.at("LCL");
+    builder.d_to_m(); // Move LCL to first empty SP (will be filled by function)
+
+    builder.goto_label(&instruction.detail); // go to function
+
+    builder.parsed_content()
+}
+
 struct AssemblerCommandBuilder {
     result: Vec<String>,
 }
@@ -360,8 +474,17 @@ impl AssemblerCommandBuilder {
         self.result.push(String::from("D;JNE"));
     }
 
+    pub fn jump_to_label_if_d_eq(&mut self, value: &str) {
+        self.result.push(format!("@{}", value));
+        self.result.push(String::from("D;JEQ"));
+    }
+
     pub fn at(&mut self, value: &str) {
         self.result.push(format!("@{}", value));
+    }
+
+    pub fn d_less_one_to_d(&mut self) {
+        self.result.push(String::from("D=D-1"));
     }
 
     pub fn d_plus_a_to_d(&mut self) {
@@ -427,20 +550,31 @@ impl AssemblerCommandBuilder {
         self.result.push(String::from("M=D"));
     }
 
-    pub fn move_value_to_d(&mut self, value: String) {
+    pub fn move_value_to_d(&mut self, value: &str) {
         self.result.push(format!("@{}", value));
         self.result.push(String::from("D=A"));
     }
 
-    pub fn get_value_from_segment(&mut self, value: &str) {
+    pub fn get_value_from_segment_plus_d(&mut self, value: &str) {
         self.result.push(format!("@{}", value));
         self.result.push(String::from("A=M+D"));
         self.result.push(String::from("D=M"));
     }
 
-    pub fn get_address_from_segment(&mut self, value: &str) {
+    pub fn get_address_from_segment_plus_d(&mut self, value: &str) {
         self.result.push(format!("@{}", value));
         self.result.push(String::from("D=M+D"));
+    }
+
+    pub fn get_value_at(&mut self, value: &str) {
+        self.result.push(format!("@{}", value));
+        self.result.push(String::from("D=M"));
+    }
+
+    pub fn goto_value_at(&mut self, value: &str) {
+        self.result.push(format!("@{}", value));
+        self.result.push(String::from("A=M"));
+        self.result.push(String::from("0;JMP"));
     }
 
     pub fn advance_sp(&mut self) {
@@ -452,6 +586,15 @@ impl AssemblerCommandBuilder {
         self.result.push(String::from("@SP"));
         self.result.push(String::from("A=M"));
         self.result.push(String::from("M=D"));
+
+        // @SP++
+        self.advance_sp();
+    }
+
+    pub fn push_to_stack_zero(&mut self) {
+        self.result.push(String::from("@SP"));
+        self.result.push(String::from("A=M"));
+        self.result.push(String::from("M=0"));
 
         // @SP++
         self.advance_sp();
