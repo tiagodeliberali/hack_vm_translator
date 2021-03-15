@@ -5,25 +5,21 @@ mod builder;
 mod parser;
 
 use crate::builder::build_content;
-use crate::parser::parse_content;
+use crate::parser::{initial_data, parse_content};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let path = args.get(1).expect("Please supply a folder or file name");
-    let name = Path::new(path)
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap();
+    let name = Path::new(path).file_name().unwrap().to_str().unwrap();
 
     let mut result: Vec<String> = Vec::new();
     let output: String;
 
     if path.ends_with(".vm") {
         result.extend(parse_file(path));
-        output = path.replace(".vm", "");
+        output = path.replace(".vm", ".asm");
     } else {
-        result.extend(parse_file(&format!("{}/Main.vm", path)));
+        result.extend(initial_data());
 
         let file_list = fs::read_dir(path).unwrap();
 
@@ -32,15 +28,14 @@ fn main() {
             let file_path = file_path_buff.to_str().unwrap();
             let file_name = Path::new(file_path).file_name().unwrap().to_str().unwrap();
 
-            if file_name.ends_with(".vm") && file_name != "Main.vm" {
+            if file_name.ends_with(".vm") {
                 result.extend(parse_file(&file_path));
             }
         }
         output = format!("{}/{}.asm", path, name);
     }
 
-    fs::write(output, result.join("\r\n"))
-        .expect("Something failed on write file to disk");
+    fs::write(output, result.join("\r\n")).expect("Something failed on write file to disk");
 }
 
 fn parse_file(file_path: &str) -> Vec<String> {
